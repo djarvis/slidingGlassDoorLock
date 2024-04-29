@@ -1,0 +1,5 @@
+name: 'My Presence Sensor'
+packageKey: 'com.smartthings.myPresenceSensor'
+permissions:
+  discovery: {}
+  lan: {}
