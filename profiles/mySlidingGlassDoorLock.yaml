@@ -3,25 +3,16 @@ name: my-sliding-glass-door-lock
 components:
 - id: main
   capabilities:
-  - id: contactSensor
+  - id: lock
     version: 1
   categories:
-  - name: door
+  - name: Door
 preferences:
   - title: "Lock Device URL"
-    name: presenceServiceUrl
-    description: The URL for the lock device
+    name: lockDeviceUrl
+    description: The IP for the lock device
     required: true
     preferenceType: string
     definition:
-      default: "http://192.168.1.201"
+      default: "192.168.1.60"
       stringType: text
-  - title: "HTTP Timeout"
-    name: httpTimeout
-    description: The HTTP Timeout
-    required: true
-    preferenceType: integer
-    definition:
-      minimum: 1
-      maximum: 60
-      default: 2

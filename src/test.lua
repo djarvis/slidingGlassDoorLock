@@ -1,15 +1,11 @@
 
 
- print()
+  print()
 print()
 print()
 print("***********************************")
 
 local socket = require("socket")
-local http = require("socket.http")
-local ltn12 = require "ltn12"
-local https = require ('ssl.https')
-local json = require('dkjson')
 
 local function sleep(n)
   socket.select(nil, nil, n)

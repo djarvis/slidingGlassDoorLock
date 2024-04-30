@@ -1,5 +1,5 @@
-name: 'My Presence Sensor'
-packageKey: 'com.smartthings.myPresenceSensor'
+name: 'My Sliding Glass Door Lock'
+packageKey: 'com.smartthings.myDoorLock'
 permissions:
   discovery: {}
   lan: {}

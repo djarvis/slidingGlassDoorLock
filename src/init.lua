@@ -3,13 +3,24 @@ local capabilities = require "st.capabilities"
 local Driver = require "st.driver"
 local log = require "log"
 local cosock = require "cosock"
-local http = cosock.asyncify "socket.http"
-local ltn12 = require('ltn12')
-local myPresence = require('myPresence')
-local json = require('dkjson')
+local socket = require "cosock.socket"
 
 -- require custom handlers from driver package
 local discovery = require "discovery"
+
+
+
+--
+-- Globals
+-- 
+KeepGoing = true;
+LockedStatus = "UNKNOWN";
+
+
+
+
+
+
 
 -----------------------------------------------------------------
 -- local functions
@@ -22,81 +33,94 @@ local function device_added(driver, device)
   -- device:emit_event(capabilities.switch.switch.on())
 end
 
-Device1Presence = "nil"
-Device2Presence = "nil"
+
 
 -- this is called both when a device is added (but after `added`) and after a hub reboots.
 local function device_init(driver, device)
+
   log.info("[" .. device.id .. "] Initializing my sliding glass door lock")
+  log.info("device_init(): defining cosock function");
+  
 
-  --
-  -- Make a global for this device
-  --
-  TheDevice = device;
+  cosock.spawn(function()
 
-  -- 
-  -- Kick off the polling timer
-  --
-  log.debug("kicking off the polling timer...")
-  local num = tonumber(device.preferences.refreshInterval);
-  log.debug("device preferences refreshInterval is " .. num);
+    
+    while KeepGoing do
 
-   PollingTimer = driver:call_on_schedule(
-    num,
-    myPresence.query,
-    "queryPresences")
+      -- try creating a new tcp?
+      local tcp = assert(socket.tcp())
+      
+      log.info("loop(): setting timeout to 60");
+      tcp:settimeout(60)
 
-  --
-  -- TEMP
-  --
-  -- log.debug("***********************************")
-  -- log.debug("**********************************")
-  -- local res_payload = {}
-  --   local url1 = TheDevice.preferences.presenceServiceUrl
-  --   log.debug("**************(): url is " .. url1)
-  --   local _, code = http.request({
-  --       url = url1,
-  --       sink = ltn12.sink.table(res_payload),
-  --       method='GET',
-  --       headers = {
-  --           ["content-type"] = "application/json",
-  --           ["connection"] = 'Keep-Alive'
-  --       },
-  --   })
+      log.info("loop(): calling tcp:connect() to " .. device.preferences.lockDeviceUrl);
+      local success, connectError = tcp:connect(device.preferences.lockDeviceUrl, 80)
+    
+      log.info("loop(): called connect(), success: " .. (success and success or "nil")  .. ", connectError: " .. (connectError and connectError or "nil"))
+    
+      local response;
+      local err;
+    
+      while not err and not connectError and KeepGoing do
+    
+        log.info("loop(): receiving...");
 
-  --   log.debug("*******************(): got code of " .. code);
-  --   log.debug(res_payload[1])
+        local response, err, partial = tcp:receive()
+    
+        if not err then
 
-  --   local o, pos, err = json.decode(res_payload[1])
+          log.info("loop(): Received from server: " .. response)
 
-  --   local size = 0
-  --   for k,v in pairs(o) do
-  --     log.debug(k .. "    " .. v)
-  --       size = size + 1
-  --   end
+          if (response == "LOCKED" and LockedStatus ~= "LOCKED") then
+            LockedStatus = "LOCKED";
+            device:emit_event(capabilities.lock.lock.locked())
+          elseif (response == "UNLOCKED" and LockedStatus ~= "UNLOCKED") then
+            LockedStatus = "UNLOCKED";
+            device:emit_event(capabilities.lock.lock.unlocked())
+          end
 
-  --   log.debug("calling emit_event()")
-  --   device:emit_event(capabilities.presenceSensor.presence.present())
-  --   device.profile.components["main2"]:emit_event(capabilities.presenceSensor.presence("not present"))
-  --   log.debug("CALLED emit_event")
 
-  --   log.debug("now retrieving the value... ");
+        elseif err == "timeout" then
+          log.info("loop(): We got a timeout and thus we are probably disconnected.");
+          tcp:close();
+          break;
+    
+        elseif err == "closed" then
+          log.info("loop(): we are closed");
+          tcp:close();
+          break
+        else
+          log.error("loop(): Receive Error: " .. err)
+        end
+      end
+    
+      log.info("sleeping for 3 seconds...");
+      socket.sleep(3)
+    end
+  
+  end, "main_loop");
 
+  log.info("loop(): running cosock routine...");
+
+  cosock.run();
 
 end
+
+
+
 
 -- this is called when a device is removed by the cloud and synchronized down to the hub
 local function device_removed(driver, device)
-  log.info("[" .. device.id .. "] Removing my presence sensor")
-  log.debug("killing the PollingTimer")
-  if (PollingTimer ~= nil) then
-    driver:cancel_timer(PollingTimer)
-    PollingTimer = nil
-  end
+  log.info("[" .. device.id .. "] Removing sliding glass door lock sensor")
+  log.debug("Setting KeepGoing to false")
+  KeepGoing = false;
 end
 
+
+
+
 -- create the driver object
-local myPresenceSensorDriver = Driver("myPresenceSensor", {
+local mySlidingGlassDoorLock = Driver("mySlidingGlassDoorLock", {
   discovery = discovery.handle_discovery,
   lifecycle_handlers = {
     added = device_added,
@@ -107,8 +131,10 @@ local myPresenceSensorDriver = Driver("myPresenceSensor", {
 
 
 
+
+
 -- run the driver
 log.debug("Running the driver..");
-myPresenceSensorDriver:run()
+mySlidingGlassDoorLock:run()
 
 
